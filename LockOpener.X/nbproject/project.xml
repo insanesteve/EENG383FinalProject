@@ -4,14 +4,14 @@
     <configuration>
         <data xmlns="http://www.netbeans.org/ns/make-project/1">
             <name>LockOpener</name>
-            <creation-uuid>60024648-2c02-4f92-9a19-ddee5a3b344e</creation-uuid>
+            <creation-uuid>4def516d-f8e8-43f9-b4e4-07fd70918386</creation-uuid>
             <make-project-type>0</make-project-type>
-            <c-extensions/>
+            <c-extensions>c</c-extensions>
             <cpp-extensions/>
-            <header-extensions/>
+            <header-extensions>h</header-extensions>
             <asminc-extensions/>
-            <make-dep-projects/>
             <sourceEncoding>ISO-8859-1</sourceEncoding>
+            <make-dep-projects/>
         </data>
     </configuration>
 </project>
