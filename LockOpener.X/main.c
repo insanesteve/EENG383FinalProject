@@ -7,6 +7,8 @@
 #define CCW 0
 #define CW  1
 
+#define LOOP 40
+
 bool readSwitch(void);
 bool openLock(void);
 void spinStepper(int16_t nums);
@@ -18,16 +20,15 @@ uint8_t lockPosition = 0;
 
 void main(void)
 {
+    uint8_t solved = false;
     // Initialize the device
     SYSTEM_Initialize();
     DIR_SetHigh();
-    //ENABLE_SetHigh();
-    ENABLE_SetLow();
     
-    uint8_t first = 0, second = 0;
+    uint8_t first = 0, second = 0, third = 0;
 
     while (true){
-        
+        ENABLE_SetHigh();
         while (!EUSART1_DataReady);
         char cmd = EUSART1_Read();
         printf("%c\r\n", cmd);
@@ -36,21 +37,18 @@ void main(void)
             case '?':
                 printf("Welcome to the Lock PIC\r\n");
                 printf("-----------------------\r\n");
-                printf("s: input the correct combo and open the lock!\r\n");
                 printf("l: loop through last digit combos\r\n");
                 printf("o: open da thing!\r\n");
-                printf("r: is da thing open????s\r\n");
+                printf("r: is da thing open????\r\n");
                 printf("k: reset lock position to 0\r\n");
-                
+                printf("1-3: Run milestone 2 demos 1-3\r\n");
                 printf("\r\n");
                 break;
-            
-            case 's':
-                enterCombo(14,20,2,true);
-                break;
+                
             case 'l':
-                //enterCombo(10,30,40,true);
-                enterCombo(14,20,40,true);
+                enterCombo(10,30,LOOP,true);
+                //enterCombo(14,20,LOOP,true);
+                break;
             case 'o':
                 openLock();
                 break;
@@ -61,7 +59,15 @@ void main(void)
                 lockPosition = 0;
                 break;
             case 't':
-                ENABLE_Toggle();
+                ENABLE_SetLow();
+                openLock();
+                ENABLE_SetHigh();
+                break;
+            case 'u':
+                OPENER_SetHigh();
+                while (!EUSART1_DataReady);
+                EUSART1_Read();
+                OPENER_SetLow();
                 break;
             case '1':
                 enterCombo(14,20,2,true);
@@ -74,16 +80,36 @@ void main(void)
                 if (enterCombo(1,2,3,true)) break;
                 break;
             case '3':
+                solved = false;
+                for (first = 14; first <= 39 && !solved; first += 2){
+                    for (second = 10; second <= 39 && !solved; second += 2){
+                        if (first != second){
+                            third = enterCombo(first, second, LOOP, true);
+                            if(third != 255) {
+                                solved = true;
+                            }
+                            if (EUSART1_DataReady) {
+                                solved = true;
+                                EUSART1_Read();
+                            }
+                        }
+                    }
+                }
+                if (solved)
+                    printf("Done! The combination is %u-%u-%u\r\n", first-2, second-2, third);
                 break;
-                
-                
         }
     }
+    
+
 }
 
 uint8_t enterCombo(uint8_t a, uint8_t b, uint8_t c, uint8_t v){
+    ENABLE_SetLow();
     int8_t lastNum;
-    if (v) printf("Trying %u %u %u\r\n", a, b, c);
+    uint8_t opened = false;
+    
+    
     //enter first number
     spinStepper(-2*FULL_ROTATION);
     moveLockTo(a, CW);
@@ -94,20 +120,26 @@ uint8_t enterCombo(uint8_t a, uint8_t b, uint8_t c, uint8_t v){
     moveLockTo(b, CCW);
     delay(20);
     
-    if (c != 40){
+    if (c != LOOP){
+        if (v) printf("Trying %u-%u-%u\r\n", a, b, c);
         moveLockTo(c, CW);
-        return openLock();
+        opened = openLock();
     }
     else {
         //try all variations of the last number 
-        for(lastNum = b-3; lastNum != b; lastNum -= 3){
+        for(lastNum = b-2; (lastNum - b + FULL_ROTATION) % FULL_ROTATION >= 2 ; lastNum -= 2){
             if (lastNum < 0) lastNum += FULL_ROTATION;
             moveLockTo(lastNum, CW);
-            printf("Now at position %u\r\n", lockPosition);
+            if (v) printf("Trying %u-%u-%u\r\n", a, b, lastNum);
             delay(20);
-            if (openLock()) return true;
+            if (openLock()) {
+                opened = true;
+                break;
+            }
+            if (EUSART1_DataReady) break;
         }
-        return false;
+        if (!opened) return 255;
+        return lastNum;
     }
 
 }
@@ -132,9 +164,6 @@ void moveLockTo(uint8_t pos, uint8_t dir){
 void spinStepper(int16_t nums){
     uint16_t i;
     
-    //turn the stepper on
-    ENABLE_SetLow();
-    
     //determine direction
     DIR_SetHigh();
     if (nums < 0){
@@ -150,9 +179,7 @@ void spinStepper(int16_t nums){
             TMR1_Reload();
             while(!TMR1_HasOverflowOccured());
     }
-    
-    //turn the stepper off
-    //ENABLE_SetHigh();
+   
 }
 
 bool openLock(void){
@@ -165,7 +192,8 @@ bool openLock(void){
     //hold it open until we get a read, if any
     for (i=0; i < READ_TIME; i++){
         delay(1);
-        if (readSwitch()){ 
+        
+        if (readSwitch()){
             opened = true;
         }
     }
